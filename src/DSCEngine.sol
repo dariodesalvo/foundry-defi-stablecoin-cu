@@ -2,10 +2,10 @@
 
 pragma solidity ^0.8.19;
 
+import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import {DecentralizedStableCoin} from "src/DecentralizedStableCoin.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
 /**
  * @title DSCEngine
@@ -42,7 +42,7 @@ contract DSCEngine is ReentrancyGuard {
 
     //Constants
 
-    uint256 private constant ADDITIONAL_FEED_PRECISION = 1e18;
+    uint256 private constant ADDITIONAL_FEED_PRECISION = 1e10;
     uint256 private constant PRECISION = 1e18;
     uint256 private constant LIQUIDATION_THRESHOLD = 50;
     uint256 private constant LIQUIDATION_PRECISION = 100;
@@ -180,7 +180,25 @@ contract DSCEngine is ReentrancyGuard {
         }
     }
 
+    function _getUSDValue(address token, uint256 amount) public view returns(uint256){
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
+        (, int256 price,,,) = priceFeed.latestRoundData();
+        return ((uint256(price) * ADDITIONAL_FEED_PRECISION) * amount) / PRECISION;
+    }
+
     // Public & External View Functions
+
+    function getUSDValue(
+        address token,
+        uint256 amount // in WEI
+    )
+        external
+        view
+        returns (uint256)
+    {
+        return _getUSDValue(token, amount);
+    }
+
 
     function getAccountCollateralValue(address user) public view returns(uint256 totalCollateralValueInUSD){
         //loop through each collateral token, get the amount they deposited
@@ -188,15 +206,12 @@ contract DSCEngine is ReentrancyGuard {
 
             address token = s_collateralTokens[i];
             uint256 amount = s_collateralDeposited[user][token];
-            totalCollateralValueInUSD +=  getUSDValue(token, amount);      
+            totalCollateralValueInUSD +=  _getUSDValue(token, amount);      
         }
 
         return totalCollateralValueInUSD;
     }
 
-    function getUSDValue(address token, uint256 amount) public view returns(uint256){
-        AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
-        (, int256 price,,,) = priceFeed.latestRoundData();
-        return (uint256(price) * ADDITIONAL_FEED_PRECISION) * amount / PRECISION ;
-    }
+
+
 }
